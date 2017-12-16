@@ -92,22 +92,23 @@ int main() {
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
 
-		  Eigen::VectorXd X(ptsx.size());
-		  Eigen::VectorXd Y(ptsy.size());
+					Eigen::VectorXd waypoints_x(ptsx.size());
+					Eigen::VectorXd waypoints_y(ptsy.size());
+		      
+					// convert points on a map coordinate to a car coordinate
+					for (unsigned int i = 0; i < ptsx.size(); i++) {
+						waypoints_x[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
+						waypoints_y[i] = (ptsy[i] - py) * cos(-psi) + (ptsx[i] - px) * sin(-psi);
+					}
 		  
-		  for (unsigned int i=0; i< ptsx.size(); i++) {
-			  X[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
-			  Y[i] = (ptsy[i] - py) * cos(-psi) + (ptsx[i] - px) * sin(-psi);
-		  }
+					// fit a polynomial to the above x and y coordinates
+					auto coeffs = polyfit(waypoints_x, waypoints_y, 3);
 		  
-		  // fit a polynomial to the above x and y coordinates
-		  auto coeffs = polyfit(X, Y, 3);
+					// calculate the cross track error
+					double cte = coeffs[0];
 		  
-		  // calculate the cross track error
-          double cte = polyeval(coeffs, 0.0) - 0.0;
-		  
-		  // calculate the orientation error
-          double epsi = 0.0 - atan(coeffs[1]);
+					// calculate the orientation error
+					double epsi = -atan(coeffs[1]);
 		  
 
           /*
@@ -116,7 +117,7 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-		  Eigen::VectorXd state(6);
+					Eigen::VectorXd state(6);
           state << 0.0, 0.0, 0.0, v, cte, epsi;
 
           auto vars = mpc.Solve(state, coeffs);
@@ -124,18 +125,19 @@ int main() {
           double steer_value;
           double throttle_value;
 		  
-		  //size_t N = vars[0];
-		  Eigen::VectorXd mpc_X(10);
+					//size_t N = vars[0];
+					Eigen::VectorXd mpc_X(10);
           Eigen::VectorXd mpc_Y(10);
 		  
-		  steer_value = vars[0] / deg2rad(25);
-		  throttle_value = vars[1];
-		  
-		  for (unsigned int i = 0; i < 10; i++) {
-			mpc_X[i] = vars[i+2];
-			mpc_Y[i] = vars[i+12];
-		  }
-		  auto mpc_coeffs = polyfit(mpc_X, mpc_Y, 3);
+					steer_value = vars[0] / deg2rad(25);
+					throttle_value = vars[1];
+					
+					size_t N = (vars.size() - 2) / 2;
+					for (unsigned int i = 0; i < N; i++) {
+						mpc_X[i] = vars[i*2+2];
+						mpc_Y[i] = vars[i*2+3];
+					}
+					auto mpc_coeffs = polyfit(mpc_X, mpc_Y, 3);
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -146,10 +148,10 @@ int main() {
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
-		  for (unsigned int i = 5; i < 25; i += 5) {
-			mpc_x_vals.push_back(i);
-			mpc_y_vals.push_back(polyeval(mpc_coeffs, i));
-		  }	  
+					for (unsigned int i = 5; i < 25; i += 5) {
+						mpc_x_vals.push_back(i);
+						mpc_y_vals.push_back(polyeval(mpc_coeffs, i));
+					}	  
 		  
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -160,10 +162,11 @@ int main() {
           //Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
-		  for (unsigned int i = 5; i < 25; i += 5) {
-			next_x_vals.push_back(i);
-			next_y_vals.push_back(polyeval(coeffs, i));
-		  }
+					
+					for (unsigned int i = 5; i < 25; i += 5) {
+						next_x_vals.push_back(i);
+						next_y_vals.push_back(polyeval(coeffs, i));
+					}
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
