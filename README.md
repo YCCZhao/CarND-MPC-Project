@@ -3,6 +3,97 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## Model Description 
+
+### Vehicle Model
+I used a kinematic model to model a vehicle in my codes. States of the vehicle is updated using parameters such as speed, acceleration, yaw angle, yaw rate, and etc; forces are not taken into account.
+
+![vehicle_model](./writeup/vehicle_model.PNG)
+
+The state of the vehicle at each time is described by the location(x, y), speed(v), and yaw angle(psi).
+In this model, the actuators are acceleration - controlled by throttle value, and yaw angle - controlled by steer angle. 
+The relation between state and actuation is shown below:
+
+![state_update](./writeup/state_update.PNG)
+
+For this project, I want the vehicle follow a dedicated path. Therefore two more states are added - cross track error and yaw rate error. 
+
+![error_update](./writeup/error_update.PNG)
+
+The path I want the vehicle to follow is described by a funtion - f(x). This function is fitted using observed points and the detail of it will be described in a later session. Cross track error is the distance between the car and the path.
+
+Psi_des_t is the desired yaw angle, which is tangent to the slope of the path. 
+
+To summarize, the vehicle state consisits of 6 variables, and the actuation consists of 2 variables
+
+### Model Predictive Controller
+Model predictive controller (MPC) is leveraged to control the vehicle model to follow the dedicated path as closely as possible. 
+
+![mpc](./writeup/mpc.png)
+
+First step of implementing a MPC is to which future state are included in the calcualtion. Then formulate all the future state using equations described in the previous session. List all the constraints of state variables and actuation variables. In this case, starting state equals to vehicle's sensor values, steer angle ranges from -25 degrees to 25 degrees, and throttle value ranges from -1 to 1. From here an optimization problem is formulated as shown below:
+
+![optimization](./writeup/optimization.PNG)
+
+The objective of the optimization problem is to minimize the cost. Since I want the vehicle follow the path as closely as possible. The cost consits of cte and epsi. Also to keep vehicle moving, the cost related to speed reference is included. Besides these, actutation values and change rates of actuation values are also added to cost in order for a smoother ride. 
+Since the order of magnitude and the weight of each cost component are different, multiple factors are included in the calculation. 
+Here is the code for cost calculation
+
+```c++
+    // Reference State Cost
+    // Define the cost related the reference state
+	for (unsigned int t = 0; t < N; t++) {
+	     fg[0] += CppAD::pow(vars[cte_start + t], 2)*16;
+      fg[0] += CppAD::pow(vars[epsi_start + t], 2)*0.1;
+      fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2)*0.05;
+	}
+	
+	// Minimize the use of actuators.
+ for (unsigned int t = 0; t < N - 1; t++) {
+   fg[0] += CppAD::pow(vars[delta_start + t], 2)*80;
+   fg[0] += CppAD::pow(vars[a_start + t], 2)*0.1;
+   // add penalty for speed + steer
+   // inspired by https://github.com/AeroGeekDean/CarND-MPC-Project/blob/master/
+   fg[0] += CppAD::pow(vars[delta_start + t] * vars[v_start+t], 2)*10;
+    }
+
+ // Minimize the value gap between sequential actuations.
+ for (unsigned int t = 0; t < N - 2; t++) {
+   fg[0] += CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2)*100;
+   fg[0] += CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2)*0.01;
+    }
+```
+    
+Finally, MPC.Solve solves the optimization problem. delta_0/max_angle and a_0 are sent to simulator as steer_angle and throttle value.
+
+## Timestep Length and Elapsed Duration Selection
+As mentioned above, the first step of MPC is to decide which future state are included in the calculation. I choose timestep length of 0.1s whilch equal to latency of 100 millisecond. It makes handling latency easier, which I will describe later. I pick 1s elapsed duration - 10 state updates. I also tried 5 future state updates and 20 future state updates, but N=10 yields better result.
+
+## Polynomial Fitting and MPC Preprocessing
+
+A funtion is used to represent the desired path. Such function is fitted using observed points. Before fitting the function, those points are convert from Map coordinate to Car coordinate. 
+
+![coordinates](./writeup/coordinates.jpg)
+
+```c++
+for (unsigned int i = 0; i < ptsx.size(); i++) {
+						waypoints_x[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
+						waypoints_y[i] = (ptsy[i] - py) * cos(-psi) + (ptsx[i] - px) * sin(-psi);
+					}
+```
+
+## Latency Handling
+Previous actuation is used to update state to account for latency. With timestep of 100 millisecond equal latency, it can more accurately simulate how state is updated, and optimize cost function with latency taken into account.
+
+```c++
+if (t > 1) {  
+        a0 = vars[a_start + t - 2];
+        delta0 = vars[delta_start + t - 2];
+      }
+ ```
+ 
+---
+
 ## Dependencies
 
 * cmake >= 3.5
