@@ -2,6 +2,9 @@
 Self-Driving Car Engineer Nanodegree Program
 
 ---
+## MPC in Action
+
+![final](./writeup/final.gif)
 
 ## Model Description 
 
@@ -77,8 +80,8 @@ A funtion is used to represent the desired path. Such function is fitted using o
 
 ```c++
 for (unsigned int i = 0; i < ptsx.size(); i++) {
-						waypoints_x[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
-						waypoints_y[i] = (ptsy[i] - py) * cos(-psi) + (ptsx[i] - px) * sin(-psi);
+  waypoints_x[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
+  waypoints_y[i] = (ptsy[i] - py) * cos(-psi) + (ptsx[i] - px) * sin(-psi);
 					}
 ```
 
@@ -87,8 +90,8 @@ Previous actuation is used to update state to account for latency. With timestep
 
 ```c++
 if (t > 1) {  
-        a0 = vars[a_start + t - 2];
-        delta0 = vars[delta_start + t - 2];
+  a0 = vars[a_start + t - 2];
+  delta0 = vars[delta_start + t - 2];
       }
  ```
  
